@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Leitura de Gabaritos - EE São Tomaz de Aquino</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf.js para geração de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.min.js"></script>
+    <!-- QRCode.js para geração de QR Codes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- jsQR para leitura de QR Code via Câmera -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            .page-break { page-break-after: always; break-after: page; }
+        }
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+        }
+        .bubble {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border: 1.5px solid #1e293b;
+            font-size: 11px;
+            font-weight: bold;
+            color: #1e293b;
+            user-select: none;
+        }
+        .bubble-circle { border-radius: 9999px; }
+        .bubble-square { border-radius: 2px; }
+        .bubble-ellipse { border-radius: 50% / 30%; }
+        
+        .bubble-selected {
+            background-color: #1e293b;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12">
+
+    <!-- CABEÇALHO DA APLICAÇÃO -->
+    <header class="bg-indigo-900 text-white shadow-md no-print">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                <h1 class="text-xl font-bold tracking-wide">Escola Estadual São Tomaz de Aquino</h1>
+                <p class="text-indigo-200 text-xs">Sistema de Correção Automática de Gabaritos</p>
+            </div>
+            <span class="bg-indigo-800 text-indigo-100 text-xs px-3 py-1 rounded-full font-medium">Uso Mobile & Acode</span>
+        </div>
+    </header>
+
+    <!-- NAVEGAÇÃO / ABAS -->
+    <nav class="bg-indigo-800 text-white shadow-inner no-print sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-2 flex overflow-x-auto space-x-1 py-2 text-sm">
+            <button onclick="switchTab('turmas')" id="btn-turmas" class="tab-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 bg-indigo-900 text-white"><i data-lucide="users"></i> Turmas</button>
+            <button onclick="switchTab('alunos')" id="btn-alunos" class="tab-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-indigo-700/50"><i data-lucide="user-plus"></i> Alunos</button>
+            <button onclick="switchTab('provas')" id="btn-provas" class="tab-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-indigo-700/50"><i data-lucide="file-text"></i> Avaliações</button>
+            <button onclick="switchTab('scanner')" id="btn-scanner" class="tab-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-indigo-700/50"><i data-lucide="qr-code"></i> Correção (Leitor)</button>
+            <button onclick="switchTab('relatorios')" id="btn-relatorios" class="tab-btn px-4 py-2 rounded-lg font-medium flex items-center gap-2 hover:bg-indigo-700/50"><i data-lucide="bar-chart-3"></i> Notas e Relatórios</button>
+        </div>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="max-w-5xl mx-auto px-4 py-6 no-print">
+
+        <!-- ABA 1: GERENCIAR TURMAS -->
+        <section id="sec-turmas" class="tab-content block space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="plus-circle" class="text-indigo-600"></i> Cadastrar / Editar Turma</h2>
+                <form id="form-turma" onsubmit="salvarTurma(event)" class="flex flex-col sm:flex-row gap-3">
+                    <input type="hidden" id="turma-id">
+                    <input type="text" id="turma-nome" placeholder="Ex: 8º Ano A ou Turma 801" required class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg flex items-center justify-center gap-2 transition">
+                        <i data-lucide="save"></i> Salvar Turma
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">Turmas Cadastradas (Ordenadas)</h2>
+                <div id="lista-turmas" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></div>
+            </div>
+        </section>
+
+        <!-- ABA 2: GERENCIAR ALUNOS -->
+        <section id="sec-alunos" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="text-indigo-600"></i> Cadastrar / Editar Aluno</h2>
+                <form id="form-aluno" onsubmit="salvarAluno(event)" class="space-y-4">
+                    <input type="hidden" id="aluno-id">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Selecione a Turma</label>
+                            <select id="aluno-turma-id" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome Completo do Aluno</label>
+                            <input type="text" id="aluno-nome" placeholder="Ex: Ana Maria Silva" required class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg flex items-center gap-2 transition">
+                        <i data-lucide="save"></i> Salvar Aluno
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <h2 class="text-lg font-bold text-slate-800">Alunos Cadastrados</h2>
+                    <select id="filtro-turma-aluno" onchange="renderizarAlunos()" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Todas as Turmas</option>
+                    </select>
+                </div>
+                <div id="lista-alunos" class="divide-y divide-slate-100"></div>
+            </div>
+        </section>
+
+        <!-- ABA 3: GERENCIAR AVALIAÇÕES -->
+        <section id="sec-provas" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><i data-lucide="file-text" class="text-indigo-600"></i> Cadastrar Avaliação e Gabarito</h2>
+                
+                <form id="form-prova" onsubmit="salvarProva(event)" class="space-y-4">
+                    <input type="hidden" id="prova-id">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome da Avaliação</label>
+                            <input type="text" id="prova-nome" placeholder="Ex: Prova Mensal de Matemática" required class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Valor Total da Prova (Pontos)</label>
+                            <input type="number" step="0.1" id="prova-valor" placeholder="Ex: 10.0" required class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Turmas Atendidas (Selecione uma ou mais)</label>
+                        <div id="prova-turmas-checkboxes" class="grid grid-cols-2 sm:grid-cols-4 gap-2 border p-3 rounded-lg max-h-32 overflow-y-auto"></div>
+                    </div>
+
+                    <!-- Configuração Visual das Alternativas -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-lg border">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Opções por Questão</label>
+                            <select id="prova-opcoes" onchange="atualizarConfigGabarito()" class="w-full px-3 py-2 rounded border border-slate-300">
+                                <option value="4">4 Opções (A, B, C, D)</option>
+                                <option value="5">5 Opções (A, B, C, D, E)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Formato do Marcador</label>
+                            <select id="prova-formato" onchange="atualizarConfigGabarito()" class="w-full px-3 py-2 rounded border border-slate-300">
+                                <option value="circle">Círculo</option>
+                                <option value="square">Quadrado</option>
+                                <option value="ellipse">Elipse</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Número de Colunas</label>
+                            <select id="prova-colunas" onchange="atualizarConfigGabarito()" class="w-full px-3 py-2 rounded border border-slate-300">
+                                <option value="1">1 Coluna</option>
+                                <option value="2" selected>2 Colunas</option>
+                                <option value="3">3 Colunas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Qtd. de Questões</label>
+                            <input type="number" id="prova-num-questoes" min="1" max="50" value="10" onchange="gerarCamposGabarito()" class="w-full px-3 py-2 rounded border border-slate-300">
+                        </div>
+                    </div>
+
+                    <!-- Seleção das Respostas Corretas -->
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-700 mb-2">Marque o Gabarito Oficial:</h3>
+                        <div id="questoes-gabarito-inputs" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded border"></div>
+                    </div>
+
+                    <!-- PREVIEW EM TEMPO REAL -->
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-700 mb-2">Visualização em Tempo Real da Folha de Respostas:</h3>
+                        <div class="border rounded-lg p-4 bg-white overflow-x-auto">
+                            <div id="preview-gabarito-container" class="min-w-[300px]"></div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg flex items-center gap-2 transition">
+                        <i data-lucide="save"></i> Salvar Avaliação
+                    </button>
+                </form>
+            </div>
+
+            <!-- Lista de Provas -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">Avaliações Cadastradas</h2>
+                <div id="lista-provas" class="space-y-3"></div>
+            </div>
+        </section>
+
+        <!-- ABA 4: SCANNER DA CÂMERA (CORREÇÃO DE 2 ETAPAS) -->
+        <section id="sec-scanner" class="tab-content hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 text-center max-w-xl mx-auto">
+                <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center justify-center gap-2">
+                    <i data-lucide="camera" class="text-indigo-600"></i> Leitor de Gabarito por Câmera
+                </h2>
+                <p class="text-xs text-slate-500 mb-4">O processo é automatizado em 2 etapas: leitura do QR Code do Aluno e verificação da folha de respostas.</p>
+
+                <!-- Área da Câmera -->
+                <div class="relative w-full aspect-square bg-slate-900 rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                    <video id="webcam-preview" class="w-full h-full object-cover" playsinline></video>
+                    <canvas id="qr-canvas" class="hidden"></canvas>
+                    
+                    <!-- Overlay Guia -->
+                    <div id="scanner-overlay" class="absolute inset-0 border-2 border-dashed border-indigo-400 m-8 rounded-lg pointer-events-none flex items-center justify-center">
+                        <span id="overlay-text" class="bg-slate-900/80 text-white text-xs px-3 py-1.5 rounded-full font-medium">Aguardando Câmera...</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex gap-2 justify-center">
+                    <button id="btn-iniciar-cam" onclick="iniciarScannerProcesso()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2">
+                        <i data-lucide="play"></i> Iniciar Leitura
+                    </button>
+                    <button id="btn-parar-cam" onclick="pararCamera()" class="bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg font-medium hidden">
+                        Parar
+                    </button>
+                </div>
+            </div>
+
+            <!-- MODAL DE ETAPA 1: CONFIRMAÇÃO DO ALUNO DETECTADO PELO QR CODE -->
+            <div id="modal-confirmacao-aluno" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
+                    <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+                        <i data-lucide="user-check" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Aluno Identificado!</h3>
+                    <div class="bg-slate-50 p-4 rounded-xl border text-left text-sm space-y-1">
+                        <p><strong>Escola:</strong> Escola Estadual São Tomaz de Aquino</p>
+                        <p><strong>Aluno:</strong> <span id="modal-aluno-nome" class="text-indigo-700 font-bold">---</span></p>
+                        <p><strong>Turma:</strong> <span id="modal-aluno-turma">---</span></p>
+                        <p><strong>Avaliação:</strong> <span id="modal-prova-nome">---</span></p>
+                    </div>
+                    <p class="text-xs text-slate-500">Confirme para prosseguir com a leitura óptica das bolhas de resposta.</p>
+                    <div class="flex gap-2">
+                        <button onclick="cancelarConfirmacaoAluno()" class="w-1/2 py-2.5 rounded-lg border text-slate-600 font-medium">Cancelar</button>
+                        <button onclick="prosseguirParaLeituraRespostas()" class="w-1/2 py-2.5 rounded-lg bg-indigo-600 text-white font-medium">Prosseguir para Gabarito</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL DE ETAPA FINAL: RESULTADO DA CORREÇÃO -->
+            <div id="modal-sucesso-correcao" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                        <i data-lucide="check-circle" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Processo Finalizado com Sucesso!</h3>
+                    <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-emerald-900 text-left text-sm space-y-1">
+                        <p><strong>Aluno:</strong> <span id="res-aluno-nome"></span></p>
+                        <p><strong>Acertos:</strong> <span id="res-acertos" class="font-bold"></span></p>
+                        <p><strong>Nota Obtida:</strong> <span id="res-nota" class="font-bold text-lg text-emerald-700"></span></p>
+                    </div>
+                    <button onclick="fecharModalSucesso()" class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium">Próximo Aluno</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 5: NOTAS E RELATÓRI
